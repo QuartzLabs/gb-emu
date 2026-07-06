@@ -1,4 +1,4 @@
-# gb-emu
+# QuartzBoy
 
 A Game Boy emulator written in C++.
 
