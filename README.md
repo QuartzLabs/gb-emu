@@ -41,4 +41,4 @@ The current executable is mainly intended for testing cartridge loading and CPU 
 
 ## License
 
-MIT
+[MIT](LICENSE)
