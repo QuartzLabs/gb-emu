@@ -1,0 +1,33 @@
+name: Clang Format
+
+on:
+  push:
+    branches: [main, dev]
+    paths:
+      - "src/**"
+      - "tests/**"
+      - ".clang-format"
+      - ".github/workflows/**"
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - "src/**"
+      - "tests/**"
+      - ".clang-format"
+      - ".github/workflows/**"
+  workflow_dispatch:
+
+jobs:
+  format-check:
+    name: Format Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Run clang-format check
+        uses: jaytakahashii/clang-format-check@v3
+        with:
+          path: "src"
+          style: "file"
