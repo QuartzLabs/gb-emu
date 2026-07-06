@@ -34,8 +34,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Setup SDL
+        id: sdl
+        uses: libsdl-org/setup-sdl@main
+        with:
+          version: 2-latest
+          install-linux-dependencies: true
+
       - name: Configure CMake
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DCMAKE_PREFIX_PATH=${{ steps.sdl.outputs.prefix }}
 
       - name: Build
         run: cmake --build build --config ${{ matrix.build_type }}

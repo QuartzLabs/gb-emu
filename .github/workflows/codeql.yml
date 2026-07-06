@@ -38,6 +38,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Setup SDL
+        id: sdl
+        uses: libsdl-org/setup-sdl@main
+        with:
+          version: 2-latest
+          install-linux-dependencies: true
+
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
         with:
@@ -45,7 +52,7 @@ jobs:
           build-mode: manual
 
       - name: Configure CMake
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=${{ steps.sdl.outputs.prefix }}
 
       - name: Build
         run: cmake --build build --config Release
