@@ -9,63 +9,27 @@ on:
 
 jobs:
   build:
-    name: ${{ matrix.os }} / ${{ matrix.build_type }}
-    runs-on: ${{ matrix.os }}
+    name: windows-latest / ${{ matrix.build_type }}
+    runs-on: windows-latest
 
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
         build_type: [Debug, Release]
 
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Install Linux dependencies
-        if: runner.os == 'Linux'
-        shell: bash
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            gcc \
-            g++ \
-            make \
-            pkg-config \
-            autoconf \
-            autoconf-archive \
-            automake \
-            libtool \
-            libltdl-dev \
-            ninja-build
-          gcc --version
-          g++ --version
-          ninja --version
-
-      - name: Setup vcpkg (Windows)
-        if: runner.os == 'Windows'
+      - name: Setup vcpkg
         shell: pwsh
         run: |
           git clone https://github.com/microsoft/vcpkg .\vcpkg
           .\vcpkg\bootstrap-vcpkg.bat
 
-      - name: Setup vcpkg (Linux)
-        if: runner.os == 'Linux'
-        shell: bash
-        run: |
-          git clone https://github.com/microsoft/vcpkg ./vcpkg
-          ./vcpkg/bootstrap-vcpkg.sh
-
-      - name: Configure CMake (Windows)
-        if: runner.os == 'Windows'
+      - name: Configure CMake
         shell: pwsh
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}\vcpkg\scripts\buildsystems\vcpkg.cmake
-
-      - name: Configure CMake (Linux)
-        if: runner.os == 'Linux'
-        shell: bash
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
 
       - name: Build
         run: cmake --build build --config ${{ matrix.build_type }}

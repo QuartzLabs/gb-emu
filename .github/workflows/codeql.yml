@@ -3,20 +3,8 @@ name: CodeQL
 on:
   push:
     branches: [main, dev]
-    paths:
-      - "src/**"
-      - "tests/**"
-      - "CMakeLists.txt"
-      - "cmake/**"
-      - ".github/workflows/**"
   pull_request:
     branches: [main, dev]
-    paths:
-      - "src/**"
-      - "tests/**"
-      - "CMakeLists.txt"
-      - "cmake/**"
-      - ".github/workflows/**"
   workflow_dispatch:
 
 jobs:
@@ -38,24 +26,47 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup SDL
-        id: sdl
-        uses: libsdl-org/setup-sdl@main
-        with:
-          version: 2-latest
-          install-linux-dependencies: true
+      - name: Install Linux dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            gcc \
+            g++ \
+            make \
+            pkg-config \
+            autoconf \
+            autoconf-archive \
+            automake \
+            libtool \
+            libltdl-dev \
+            ninja-build
+          gcc --version
+          g++ --version
+          ninja --version
+
+      - name: Setup vcpkg
+        shell: bash
+        run: |
+          git clone https://github.com/microsoft/vcpkg ./vcpkg
+          ./vcpkg/bootstrap-vcpkg.sh
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v4
+        uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}
           build-mode: manual
 
       - name: Configure CMake
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=${{ steps.sdl.outputs.prefix }}
+        shell: bash
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
 
       - name: Build
         run: cmake --build build --config Release
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v4
+        uses: github/codeql-action/analyze@v3
