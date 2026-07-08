@@ -32,16 +32,22 @@ jobs:
 
       - name: Setup SDL (Windows)
         if: matrix.os == 'windows-latest'
+        id: sdl
         uses: libsdl-org/setup-sdl@main
         with:
           version: 2-latest
-          install-linux-dependencies: false
-          install-test-dependencies: false
           sdl2: true
           sdl2-ttf: true
+          install-linux-dependencies: false
+          install-test-dependencies: false
 
-      - name: Configure CMake
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} ${{ matrix.os == 'windows-latest' && format('-DCMAKE_PREFIX_PATH={0}', env.SDL2DIR) || '' }}
+      - name: Configure CMake (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+
+      - name: Configure CMake (Windows)
+        if: matrix.os == 'windows-latest'
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DCMAKE_PREFIX_PATH="${{ steps.sdl.outputs.prefix }}"
 
       - name: Build
         run: cmake --build build --config ${{ matrix.build_type }}
