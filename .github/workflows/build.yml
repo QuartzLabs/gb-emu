@@ -3,20 +3,8 @@ name: Build
 on:
   push:
     branches: [main, dev]
-    paths:
-      - "src/**"
-      - "tests/**"
-      - "CMakeLists.txt"
-      - "cmake/**"
-      - ".github/workflows/**"
   pull_request:
     branches: [main, dev]
-    paths:
-      - "src/**"
-      - "tests/**"
-      - "CMakeLists.txt"
-      - "cmake/**"
-      - ".github/workflows/**"
   workflow_dispatch:
 
 jobs:
@@ -34,15 +22,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup SDL
-        id: sdl
+      - name: Install dependencies (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libsdl2-dev \
+            libsdl2-ttf-dev
+
+      - name: Setup SDL (Windows)
+        if: matrix.os == 'windows-latest'
         uses: libsdl-org/setup-sdl@main
         with:
           version: 2-latest
-          install-linux-dependencies: true
+          install-linux-dependencies: false
+          install-test-dependencies: false
+          sdl2: true
+          sdl2-ttf: true
 
       - name: Configure CMake
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DCMAKE_PREFIX_PATH=${{ steps.sdl.outputs.prefix }}
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} ${{ matrix.os == 'windows-latest' && format('-DCMAKE_PREFIX_PATH={0}', env.SDL2DIR) || '' }}
 
       - name: Build
         run: cmake --build build --config ${{ matrix.build_type }}
