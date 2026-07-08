@@ -1,215 +1,279 @@
 #include "application.h"
 
-#include <SDL.h>
-
-#include <algorithm>
-#include <cctype>
 #include <filesystem>
+#include <memory>
 #include <string>
-#include <stdexcept>
 
-namespace gb::platform::sdl
-{
-namespace
-{
-std::string to_lower(std::string value)
-{
-    std::transform(
-        value.begin(),
-        value.end(),
-        value.begin(),
-        [](unsigned char c)
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <Windows.h>
+#include <commdlg.h>
+#endif
+
+namespace gb::platform::sdl {
+    namespace
+    {
+        constexpr int kWindowWidth = 1280;
+        constexpr int kWindowHeight = 720;
+        constexpr int kStepsPerFrame = 2000;
+
+        std::string rom_name_from_path(const std::filesystem::path& path)
         {
-            return static_cast<char>(std::tolower(c));
-        });
+            return path.filename().string();
+        }
 
-    return value;
-}
-}
+#ifdef _WIN32
+        std::string wstring_to_utf8(const std::wstring& value)
+        {
+            if (value.empty())
+            {
+                return {};
+            }
 
-Application::Application()
-    : m_running(false)
-    , m_initialized(false)
-    , m_rom_loaded(false)
-    , m_rom_name("No ROM loaded")
-    , m_rom_path()
-    , m_cartridge()
-    , m_bus()
-    , m_cpu()
-    , m_window(nullptr)
-{
-}
+            const int size_needed = WideCharToMultiByte(
+                CP_UTF8,
+                0,
+                value.c_str(),
+                static_cast<int>(value.size()),
+                nullptr,
+                0,
+                nullptr,
+                nullptr
+            );
 
-Application::~Application()
-{
-    shutdown();
-}
+            if (size_needed <= 0)
+            {
+                return {};
+            }
 
-int Application::run()
-{
-    if (!initialize())
-    {
-        return 1;
+            std::string result(size_needed, '\0');
+
+            WideCharToMultiByte(
+                CP_UTF8,
+                0,
+                value.c_str(),
+                static_cast<int>(value.size()),
+                result.data(),
+                size_needed,
+                nullptr,
+                nullptr
+            );
+
+            return result;
+        }
+#endif
     }
 
-    m_running = true;
-
-    while (m_running)
+    Application::Application()
+        : m_running(false)
+        , m_initialized(false)
+        , m_rom_loaded(false)
+        , m_rom_name()
+        , m_rom_path()
+        , m_cartridge()
+        , m_bus()
+        , m_cpu()
+        , m_window(nullptr)
     {
-        handle_events();
-        render();
     }
 
-    return 0;
-}
-
-bool Application::initialize()
-{
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_EVENTS) != 0)
+    Application::~Application()
     {
-        SDL_ShowSimpleMessageBox(
-            SDL_MESSAGEBOX_ERROR,
-            "SDL initialization error",
-            SDL_GetError(),
-            nullptr);
-        return false;
+        shutdown();
     }
 
-    try
+    bool Application::initialize()
     {
-        m_window = new Window("gb-emu", 1280, 720);
-    }
-    catch (const std::exception&)
-    {
-        SDL_ShowSimpleMessageBox(
-            SDL_MESSAGEBOX_ERROR,
-            "Window creation error",
-            SDL_GetError(),
-            nullptr);
-        SDL_Quit();
-        return false;
+        if (m_initialized)
+        {
+            return true;
+        }
+
+        try
+        {
+            m_window = std::make_unique<Window>("gb-emu", kWindowWidth, kWindowHeight);
+        }
+        catch (...)
+        {
+            m_window.reset();
+            return false;
+        }
+
+        if (!m_window || !m_window->is_valid())
+        {
+            m_window.reset();
+            return false;
+        }
+
+        m_initialized = true;
+        m_running = true;
+        return true;
     }
 
-    m_initialized = true;
-    return true;
-}
-
-void Application::shutdown()
-{
-    if (m_window)
+    void Application::shutdown()
     {
-        delete m_window;
-        m_window = nullptr;
-    }
-
-    if (m_initialized)
-    {
-        SDL_Quit();
+        m_running = false;
+        m_window.reset();
         m_initialized = false;
     }
-}
 
-void Application::handle_events()
-{
-    SDL_Event event {};
-
-    while (SDL_PollEvent(&event))
+    bool Application::is_supported_rom(const std::string& path) const
     {
-        switch (event.type)
-        {
-        case SDL_QUIT:
-            m_running = false;
-            break;
+        const std::filesystem::path rom_path(path);
+        const std::string extension = rom_path.extension().string();
 
-        case SDL_KEYDOWN:
-            if (event.key.keysym.sym == SDLK_ESCAPE)
-            {
-                m_running = false;
-            }
-            else if (event.key.keysym.sym == SDLK_o)
-            {
-                try_open_rom_dialog();
-            }
-            break;
+        return extension == ".gb" || extension == ".gbc";
+    }
 
-        case SDL_DROPFILE:
+    bool Application::try_open_rom_dialog()
+    {
+#ifdef _WIN32
+        std::wstring file_buffer(MAX_PATH, L'\0');
+
+        OPENFILENAMEW ofn{};
+        ofn.lStructSize = sizeof(ofn);
+        ofn.hwndOwner = nullptr;
+        ofn.lpstrFile = file_buffer.data();
+        ofn.nMaxFile = static_cast<DWORD>(file_buffer.size());
+        ofn.lpstrFilter = L"Game Boy ROMs\0*.gb;*.gbc\0All Files\0*.*\0";
+        ofn.nFilterIndex = 1;
+        ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_EXPLORER;
+
+        if (!GetOpenFileNameW(&ofn))
         {
-            if (event.drop.file)
-            {
-                std::string dropped_path = event.drop.file;
-                load_rom(dropped_path);
-                SDL_free(event.drop.file);
-            }
-            break;
+            return false;
         }
 
-        default:
-            break;
+        return load_rom(wstring_to_utf8(ofn.lpstrFile));
+#else
+        return false;
+#endif
+    }
+
+    bool Application::load_rom(const std::string& path)
+    {
+        if (!is_supported_rom(path))
+        {
+            return false;
+        }
+
+        if (!m_cartridge.load_from_file(path))
+        {
+            return false;
+        }
+
+        m_rom_path = path;
+        m_rom_name = rom_name_from_path(std::filesystem::path(path));
+        m_rom_loaded = true;
+
+        reset_emulator_with_loaded_rom();
+        return true;
+    }
+
+    void Application::reset_emulator_with_loaded_rom()
+    {
+        if (!m_rom_loaded)
+        {
+            return;
+        }
+
+        m_bus.reset();
+        m_bus.attach_cartridge(&m_cartridge);
+        m_cpu.connect_bus(&m_bus);
+        m_cpu.reset();
+    }
+
+    void Application::run_emulator_frame()
+    {
+        if (!m_rom_loaded)
+        {
+            return;
+        }
+
+        for (int i = 0; i < kStepsPerFrame; ++i)
+        {
+            m_cpu.step();
+
+            if (m_cpu.is_halted() || m_cpu.has_fault())
+            {
+                break;
+            }
         }
     }
-}
 
-void Application::render()
-{
-    m_window->clear();
-    m_window->draw_ui(m_rom_loaded, m_rom_name);
-    m_window->present();
-}
-
-bool Application::try_open_rom_dialog()
-{
-    SDL_ShowSimpleMessageBox(
-        SDL_MESSAGEBOX_INFORMATION,
-        "Open ROM",
-        "Native file dialog is temporarily disabled in this build.\n\nFor now, drag and drop a .gb or .gbc file onto the window.",
-        m_window ? m_window->native_window() : nullptr);
-
-    return false;
-}
-
-bool Application::load_rom(const std::string& path)
-{
-    if (!is_supported_rom(path))
+    void Application::handle_events()
     {
-        SDL_ShowSimpleMessageBox(
-            SDL_MESSAGEBOX_ERROR,
-            "Unsupported ROM",
-            "Please select a .gb or .gbc file.",
-            m_window ? m_window->native_window() : nullptr);
-        return false;
+        SDL_Event event{};
+
+        while (SDL_PollEvent(&event))
+        {
+            switch (event.type)
+            {
+                case SDL_QUIT:
+                    m_running = false;
+                    break;
+
+                case SDL_DROPFILE:
+                    if (event.drop.file != nullptr)
+                    {
+                        load_rom(event.drop.file);
+                        SDL_free(event.drop.file);
+                    }
+                    break;
+
+                case SDL_KEYDOWN:
+                    if (event.key.keysym.sym == SDLK_ESCAPE)
+                    {
+                        m_running = false;
+                    }
+#ifdef _WIN32
+                    else if (event.key.keysym.sym == SDLK_o &&
+                             (event.key.keysym.mod & KMOD_CTRL))
+                    {
+                        try_open_rom_dialog();
+                    }
+#endif
+                    break;
+
+                default:
+                    break;
+            }
+        }
     }
 
-    if (!m_cartridge.load_from_file(path))
+    void Application::render()
     {
-        SDL_ShowSimpleMessageBox(
-            SDL_MESSAGEBOX_ERROR,
-            "ROM load error",
-            "Failed to load the selected ROM file.",
-            m_window ? m_window->native_window() : nullptr);
-        return false;
+        if (!m_window)
+        {
+            return;
+        }
+
+        m_window->clear();
+        m_window->draw_ui(
+            m_rom_loaded,
+            m_rom_name,
+            m_cpu
+        );
+        m_window->present();
     }
 
-    m_rom_loaded = true;
-    m_rom_path = path;
-    m_rom_name = m_cartridge.path().filename().string();
+    int Application::run()
+    {
+        if (!initialize())
+        {
+            return 1;
+        }
 
-    reset_emulator_with_loaded_rom();
+        while (m_running)
+        {
+            handle_events();
+            run_emulator_frame();
+            render();
+        }
 
-    return true;
-}
-
-bool Application::is_supported_rom(const std::string& path) const
-{
-    const std::string ext = to_lower(std::filesystem::path(path).extension().string());
-    return ext == ".gb" || ext == ".gbc";
-}
-
-void Application::reset_emulator_with_loaded_rom()
-{
-    m_bus.attach_cartridge(&m_cartridge);
-    m_bus.reset();
-
-    m_cpu.connect_bus(&m_bus);
-    m_cpu.reset();
-}
+        shutdown();
+        return 0;
+    }
 }

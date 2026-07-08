@@ -5,6 +5,7 @@
 #include "core/cpu/cpu.h"
 #include "platform/sdl/window.h"
 
+#include <memory>
 #include <string>
 
 namespace gb::platform::sdl
@@ -25,6 +26,7 @@ namespace gb::platform::sdl
         void shutdown();
         void handle_events();
         void render();
+        void run_emulator_frame();
 
         bool try_open_rom_dialog();
         bool load_rom(const std::string& path);
@@ -42,6 +44,6 @@ namespace gb::platform::sdl
         gb::Bus m_bus;
         gb::Cpu m_cpu;
 
-        Window* m_window;
+        std::unique_ptr<Window> m_window;
     };
 }
