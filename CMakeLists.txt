@@ -6,8 +6,8 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-find_package(SDL2 REQUIRED CONFIG)
-find_package(SDL2_ttf REQUIRED CONFIG)
+find_package(SDL2 CONFIG REQUIRED)
+find_package(SDL2_ttf CONFIG REQUIRED)
 
 set(SOURCES
         src/main.cpp
@@ -28,5 +28,5 @@ target_include_directories(gb-emu PRIVATE
 
 target_link_libraries(gb-emu PRIVATE
         SDL2::SDL2
-        SDL2_ttf::SDL2_ttf
+        $<IF:$<TARGET_EXISTS:SDL2_ttf::SDL2_ttf>,SDL2_ttf::SDL2_ttf,SDL2_ttf::SDL2_ttf-static>
 )

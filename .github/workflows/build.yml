@@ -30,16 +30,13 @@ jobs:
             libsdl2-dev \
             libsdl2-ttf-dev
 
-      - name: Setup SDL (Windows)
+      - name: Setup vcpkg (Windows)
         if: matrix.os == 'windows-latest'
-        id: sdl
-        uses: libsdl-org/setup-sdl@main
-        with:
-          version: 2-latest
-          sdl2: true
-          sdl2-ttf: true
-          install-linux-dependencies: false
-          install-test-dependencies: false
+        uses: lukka/run-vcpkg@v11
+
+      - name: Install SDL packages (Windows)
+        if: matrix.os == 'windows-latest'
+        run: vcpkg install sdl2:x64-windows sdl2-ttf:x64-windows
 
       - name: Configure CMake (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
@@ -47,7 +44,7 @@ jobs:
 
       - name: Configure CMake (Windows)
         if: matrix.os == 'windows-latest'
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DCMAKE_PREFIX_PATH="${{ steps.sdl.outputs.prefix }}"
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
 
       - name: Build
         run: cmake --build build --config ${{ matrix.build_type }}
