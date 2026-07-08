@@ -20,35 +20,31 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
-      - name: Install dependencies (Ubuntu)
-        if: matrix.os == 'ubuntu-latest'
+      - name: Setup vcpkg (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libsdl2-dev \
-            libsdl2-ttf-dev
+          git clone https://github.com/microsoft/vcpkg .\vcpkg
+          .\vcpkg\bootstrap-vcpkg.bat
 
-      - name: Clone vcpkg (Windows)
-        if: matrix.os == 'windows-latest'
-        run: git clone https://github.com/microsoft/vcpkg.git
-
-      - name: Bootstrap vcpkg (Windows)
-        if: matrix.os == 'windows-latest'
-        run: .\vcpkg\bootstrap-vcpkg.bat
-
-      - name: Install SDL packages (Windows)
-        if: matrix.os == 'windows-latest'
-        run: .\vcpkg\vcpkg.exe install sdl2:x64-windows sdl2-ttf:x64-windows
-
-      - name: Configure CMake (Ubuntu)
-        if: matrix.os == 'ubuntu-latest'
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+      - name: Setup vcpkg (Linux)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          git clone https://github.com/microsoft/vcpkg ./vcpkg
+          ./vcpkg/bootstrap-vcpkg.sh
 
       - name: Configure CMake (Windows)
-        if: matrix.os == 'windows-latest'
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}\vcpkg\scripts\buildsystems\vcpkg.cmake"
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}\vcpkg\scripts\buildsystems\vcpkg.cmake
+
+      - name: Configure CMake (Linux)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
 
       - name: Build
         run: cmake --build build --config ${{ matrix.build_type }}
