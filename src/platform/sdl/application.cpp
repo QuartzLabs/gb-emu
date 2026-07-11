@@ -192,13 +192,25 @@ namespace gb::platform::sdl {
             return;
         }
 
-        for (int i = 0; i < kStepsPerFrame; ++i)
-        {
-            m_cpu.step();
+        constexpr int kInstructionsPerFrame = 2000;
+        constexpr int kApproxCyclesPerInstruction = 4;
 
-            if (m_cpu.is_halted() || m_cpu.has_fault())
+        for (int i = 0; i < kInstructionsPerFrame; ++i)
+        {
+            const bool was_halted = m_cpu.is_halted();
+
+            m_cpu.step();
+            m_bus.tick(kApproxCyclesPerInstruction);
+
+            if (m_cpu.has_fault())
             {
+                m_running = false;
                 break;
+            }
+
+            if (was_halted && m_cpu.is_halted())
+            {
+                continue;
             }
         }
     }
